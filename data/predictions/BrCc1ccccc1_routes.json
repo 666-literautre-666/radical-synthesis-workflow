@@ -1,0 +1,53 @@
+{
+  "substrate_analysis": {
+    "smiles": "BrCc1ccccc1",
+    "formula": "C7H7Br",
+    "molecular_weight": 171.04,
+    "rotatable_bonds": 1,
+    "hbd": 0,
+    "hba": 0,
+    "reactive_sites": [
+      {
+        "site": "C0-Br",
+        "type": "carbon_halogen_bond",
+        "atom_index": 0,
+        "reactivity": "high",
+        "suggested_reaction": "atom_transfer or radical_cyclization",
+        "note": "C-Br bond: good radical precursor"
+      },
+      {
+        "site": "C1 (benzylic)",
+        "type": "benzylic_C-H",
+        "atom_index": 1,
+        "reactivity": "high",
+        "suggested_reaction": "HAT or radical functionalization",
+        "note": "Benzylic C-H: weak BDE ~85-90 kcal/mol"
+      }
+    ],
+    "n_reactive_sites": 2
+  },
+  "target": "radical cyclization with alkene",
+  "recommended_reaction_types": [
+    "atom_transfer",
+    "radical_cyclization",
+    "hydrogen_atom_transfer"
+  ],
+  "recommended_initiators": [
+    "TBHP",
+    "DTBP",
+    "ACCN",
+    "AIBN"
+  ],
+  "recommended_catalysts": [
+    "Cu(I)/PMDETA",
+    "Cu(I)/TPMA"
+  ],
+  "catalyst_type": "ATRP-type",
+  "suggested_conditions": {
+    "temperature": "60-80 \u00b0C (thermal initiator) or RT (photoredox)",
+    "solvent": "MeCN, DCE, or PhH (deoxygenated, freeze-pump-thaw or N2 sparge)",
+    "atmosphere": "N2 or Ar (strictly oxygen-free)",
+    "concentration": "0.1-0.5 M substrate, initiator 10-20 mol%",
+    "time": "Monitor by TLC or GC-MS, typically 2-24 h"
+  }
+}

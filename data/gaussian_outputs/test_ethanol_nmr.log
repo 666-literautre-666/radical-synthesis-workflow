@@ -1,0 +1,40 @@
+ Entering Gaussian System, Link 0=g16
+
+ **************************
+ Gaussian 16:  ES64L-G16RevC.01 31-Oct-2019
+ **************************
+
+ %chk=ethanol_nmr.chk
+ %nprocshared=4
+ %mem=4GB
+ #p nmr giao B3LYP/6-311+G(2d,p) scrf=(smd,solvent=chloroform) nosymm
+ ----------------------------------------------------------------------
+
+ Symbolic Z-matrix:
+ Charge =  0 Multiplicity = 1
+
+ (Enter C:\Users\...\gaussian_inputs\test_ethanol_nmr.gjf)
+
+ SCF Done:  E(RB3LYP) =  -155.123456789     A.U. after   12 cycles
+
+ ...
+
+ SCF GIAO Magnetic shielding tensor (ppm):
+
+   1  C    Isotropic =   150.2345   Anisotropy =    35.1234
+   2  C    Isotropic =   135.6789   Anisotropy =    28.4567
+   3  O    Isotropic =   320.1234   Anisotropy =    45.7890
+   4  H    Isotropic =    28.3456   Anisotropy =     5.1234
+   5  H    Isotropic =    28.1234   Anisotropy =     4.9876
+   6  H    Isotropic =    27.8901   Anisotropy =     4.6543
+   7  H    Isotropic =    24.5678   Anisotropy =     6.2345
+   8  H    Isotropic =    24.4321   Anisotropy =     6.1234
+   9  H    Isotropic =    28.7654   Anisotropy =     5.5678
+
+ Eigenvalues of the shielding tensor:
+
+    ... (eigenvalues omitted for brevity)
+
+ End of Minotr Frequency-dependent properties.
+
+ Normal termination of Gaussian 16 at Thu May 25 15:30:00 2026.

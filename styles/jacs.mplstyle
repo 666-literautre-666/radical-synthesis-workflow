@@ -1,0 +1,36 @@
+# JACS (Journal of the American Chemical Society) style
+# Single column: 3.3 in, double column: 7.0 in
+
+figure.facecolor: white
+figure.edgecolor: white
+figure.dpi: 600
+savefig.dpi: 600
+savefig.bbox: tight
+savefig.format: svg
+savefig.transparent: False
+
+font.family: sans-serif
+font.sans-serif: Arial, Helvetica, DejaVu Sans
+font.size: 8
+axes.titlesize: 9
+axes.labelsize: 8
+axes.linewidth: 0.6
+axes.spines.top: False
+axes.spines.right: False
+
+xtick.labelsize: 7
+ytick.labelsize: 7
+xtick.major.width: 0.5
+ytick.major.width: 0.5
+xtick.major.size: 3
+ytick.major.size: 3
+xtick.direction: in
+ytick.direction: in
+
+lines.linewidth: 1.0
+lines.markersize: 4
+
+legend.fontsize: 7
+legend.frameon: False
+
+axes.prop_cycle: cycler('color', ['1a1a1a', 'c0392b', '2980b9', '27ae60', '8e44ad', 'd35400', '16a085'])

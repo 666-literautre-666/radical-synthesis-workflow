@@ -1,0 +1,36 @@
+# Nature Chemistry style
+# Figures are typically wider, with minimalist aesthetics
+
+figure.facecolor: white
+figure.edgecolor: white
+figure.dpi: 600
+savefig.dpi: 600
+savefig.bbox: tight
+savefig.format: svg
+savefig.transparent: False
+
+font.family: sans-serif
+font.sans-serif: Helvetica, Arial, DejaVu Sans
+font.size: 7
+axes.titlesize: 8
+axes.labelsize: 7
+axes.linewidth: 0.5
+axes.spines.top: False
+axes.spines.right: False
+
+xtick.labelsize: 6
+ytick.labelsize: 6
+xtick.major.width: 0.4
+ytick.major.width: 0.4
+xtick.major.size: 2.5
+ytick.major.size: 2.5
+xtick.direction: out
+ytick.direction: out
+
+lines.linewidth: 0.8
+lines.markersize: 3
+
+legend.fontsize: 6
+legend.frameon: False
+
+axes.prop_cycle: cycler('color', ['212121', 'c62828', '1565c0', '2e7d32', '6a1b9a'])

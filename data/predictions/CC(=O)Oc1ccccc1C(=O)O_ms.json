@@ -1,0 +1,88 @@
+{
+  "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+  "formula": "C9H8O4",
+  "monoisotopic_mass": 180.042258736,
+  "charge": 1,
+  "mz": [
+    180.042258736,
+    181.04560873600002,
+    182.048968736
+  ],
+  "intensity": [
+    100.0,
+    9.72,
+    0.419904
+  ],
+  "mz_theoretical": [
+    180.042258736,
+    181.04560873600002,
+    182.048968736
+  ],
+  "relative_abundance": [
+    100.0,
+    9.72,
+    0.419904
+  ],
+  "fragments": [
+    {
+      "fragment_smiles": "[1*]C",
+      "exact_mass": 15.0235,
+      "parent_bond_idx": 0,
+      "fragility_score": 1.0
+    },
+    {
+      "fragment_smiles": "[10*]O",
+      "exact_mass": 17.0027,
+      "parent_bond_idx": 11,
+      "fragility_score": 0.7
+    },
+    {
+      "fragment_smiles": "[3*]C(C)=O",
+      "exact_mass": 43.0184,
+      "parent_bond_idx": 2,
+      "fragility_score": 0.7
+    },
+    {
+      "fragment_smiles": "[9*]C(=O)O",
+      "exact_mass": 44.9977,
+      "parent_bond_idx": 9,
+      "fragility_score": 1.0
+    },
+    {
+      "fragment_smiles": "[4*]OC(C)=O",
+      "exact_mass": 59.0133,
+      "parent_bond_idx": 3,
+      "fragility_score": 0.7
+    },
+    {
+      "fragment_smiles": "[3*]c1ccccc1C(=O)O",
+      "exact_mass": 121.029,
+      "parent_bond_idx": 3,
+      "fragility_score": 0.7
+    },
+    {
+      "fragment_smiles": "[10*]c1ccccc1OC(C)=O",
+      "exact_mass": 135.0446,
+      "parent_bond_idx": 9,
+      "fragility_score": 1.0
+    },
+    {
+      "fragment_smiles": "[1*]Oc1ccccc1C(=O)O",
+      "exact_mass": 137.0239,
+      "parent_bond_idx": 2,
+      "fragility_score": 0.7
+    },
+    {
+      "fragment_smiles": "[12*]C(=O)c1ccccc1OC(C)=O",
+      "exact_mass": 163.0395,
+      "parent_bond_idx": 11,
+      "fragility_score": 0.7
+    },
+    {
+      "fragment_smiles": "*C(=O)Oc1ccccc1C(=O)O",
+      "exact_mass": 165.0188,
+      "parent_bond_idx": 0,
+      "fragility_score": 1.0
+    }
+  ]
+}

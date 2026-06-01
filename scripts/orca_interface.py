@@ -19,6 +19,7 @@ ORCA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # 常见 ORCA 路径
 ORCA_PATHS = [
+    r"C:\ORCA_6.1.1\orca.exe",
     "orca", r"C:\orca\orca.exe", r"C:\orca\orca.bat",
     r"C:\Program Files\orca\orca.exe", r"D:\orca\orca.exe",
 ]
@@ -124,15 +125,15 @@ def build_epr_input(smiles: str, name: str = "radical",
     solv = SOLVENTS.get(solvent.lower(), solvent)
     solv_line = f"CPCM({solv})" if solv else ""
 
-    inp = f"""! {func} {bs} EPRNMR {solv_line} TightSCF
+    inp = f"""! {func} {bs} {solv_line} TightSCF
 %pal nprocs {n_cores} end
 %maxcore 2000
-%eprnmr
-  Nuclei = all H {{ also C, N, O }} {{ also F, P }}
-  end
 * xyz 0 {multiplicity}
 {coords}
 *
+%eprnmr
+  Nuclei = all H {{ also C, N, O }} {{ also F, P, Br }}
+  end
 """
     return inp
 

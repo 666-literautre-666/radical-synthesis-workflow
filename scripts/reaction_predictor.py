@@ -10,7 +10,16 @@ from rdkit import Chem
 from rdkit.Chem import AllChem, Descriptors, rdFMCS
 from rdkit.Chem import BRICS, Recap
 
-from scripts.plot_utils import PREDICTIONS_DIR
+try:
+    from scripts.database import (get_smarts_matches, query_similar_substrates,
+                                   get_initiators_for_condition, add_experiment,
+                                   init_database)
+    from scripts.plot_utils import PREDICTIONS_DIR
+except ModuleNotFoundError:
+    from database import (get_smarts_matches, query_similar_substrates,
+                          get_initiators_for_condition, add_experiment,
+                          init_database)
+    from plot_utils import PREDICTIONS_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -339,4 +348,195 @@ def retrosynthetic_bonds(smiles: str) -> list[dict]:
     return results
 
 
-print("[reaction_predictor] Ready.")
+# ---------------------------------------------------------------------------
+# 集成推荐引擎: SMARTS → 数据库 → 决策
+# ---------------------------------------------------------------------------
+
+def predict_conditions(smiles: str) -> dict:
+    """
+    一键预测：输入 SMILES → 输出推荐反应条件 + 判断是否值得合成。
+
+    返回结构：
+    {
+        "substrate": {...},
+        "smarts_matches": [...],
+        "similar_in_db": [...],
+        "recommended_conditions": {...},
+        "decision": {"worth_synthesizing": bool, "confidence": str, "reason": str}
+    }
+    """
+    # --- 1. 底物分析 ---
+    substrate = analyze_substrate(smiles)
+    if "error" in substrate:
+        return {"error": substrate["error"]}
+
+    # --- 2. SMARTS 规则匹配 ---
+    smarts_hits = get_smarts_matches(smiles)
+
+    # --- 3. 数据库相似底物查询 ---
+    similar = query_similar_substrates(smiles, limit=5)
+
+    # --- 4. 反应类型推断 ---
+    reaction_families = list(set(h["reaction_family"] for h in smarts_hits))
+    if not reaction_families:
+        reaction_families = ["HAT"]  # default
+
+    # --- 5. 数据库匹配条件 ---
+    db_conditions = {}
+    if similar and similar[0].get("initiator"):
+        best_match = similar[0]
+        db_conditions = {
+            "initiator": best_match.get("initiator"),
+            "solvent": best_match.get("solvent"),
+            "temperature": best_match.get("temperature"),
+            "catalyst": best_match.get("catalyst"),
+            "yield_reference": best_match.get("yield_percent"),
+            "source": f"Database: {best_match.get('substrate_name', '')} (Tanimoto + substructure match)",
+        }
+
+    # --- 6. 合并推荐（数据库优先，规则补充）---
+    route = suggest_reaction_routes(smiles)
+    recommended = db_conditions if db_conditions else route.get("suggested_conditions", {})
+
+    # --- 7. BDE 估算 ---
+    bde_info = _estimate_bde(smiles)
+
+    # --- 8. 决策：是否值得合成 ---
+    decision = _assess_synthesizability(
+        substrate, smarts_hits, similar, bde_info
+    )
+
+    result = {
+        "smiles": smiles,
+        "substrate": substrate,
+        "smarts_matches": smarts_hits,
+        "reaction_families": reaction_families,
+        "similar_in_db": similar,
+        "recommended_conditions": {
+            "initiator": recommended.get("initiator", "AIBN"),
+            "solvent": recommended.get("solvent", "Toluene"),
+            "temperature": recommended.get("temperature", "60-80 °C"),
+            "catalyst": recommended.get("catalyst", ""),
+            "yield_reference": recommended.get("yield_reference"),
+            "source": recommended.get("source", "Rule-based default"),
+        },
+        "bde_estimate": bde_info,
+        "decision": decision,
+    }
+
+    # --- 9. 保存 ---
+    safe_name = smiles[:30].replace(" ", "_").replace("/", "_")
+    pred_path = PREDICTIONS_DIR / f"{safe_name}_prediction.json"
+    with open(pred_path, "w") as f:
+        json.dump(result, f, indent=2, default=str)
+    result["_saved_to"] = str(pred_path)
+
+    return result
+
+
+def _estimate_bde(smiles: str) -> dict:
+    """
+    估算分子中最弱 C-H 键的 BDE（键解离能）。
+    使用 RDKit 片段加和方法。
+
+    返回: {"weakest_bond": "C5-H", "estimated_bde_kcal": 87, "confidence": "low"}
+    """
+    mol = Chem.MolFromSmiles(smiles)
+    if not mol:
+        return {"error": "Invalid SMILES"}
+
+    # 基于经验规则估算 BDE
+    # 参考: Pratt, D.A. et al. J. Org. Chem. 2003
+    # 苄位 ~88, 烯丙位 ~86, 三级 C-H ~96, 醛 ~87
+
+    bde_rules = [
+        ("[c][CH2]", 88, "benzylic C-H"),
+        ("[c][CH]([C])[C]", 85, "benzylic tertiary C-H"),
+        ("[C]=[C][CH2]", 86, "allylic C-H"),
+        ("[CX3H1](=O)", 87, "aldehyde C-H"),
+        ("[CH]([C])([C])[C]", 96, "tertiary C-H"),
+        ("[CH2]([C])[C]", 98, "secondary C-H"),
+        ("[CH3][C]", 101, "primary C-H"),
+    ]
+
+    weakest = None
+    for smarts, bde, label in bde_rules:
+        pattern = Chem.MolFromSmarts(smarts)
+        if pattern and mol.HasSubstructMatch(pattern):
+            matches = mol.GetSubstructMatches(pattern)
+            if matches:
+                if weakest is None or bde < weakest["bde"]:
+                    weakest = {
+                        "site": f"C{matches[0][0]}",
+                        "smarts": smarts,
+                        "estimated_bde_kcal": bde,
+                        "label": label,
+                        "n_matches": len(matches),
+                    }
+
+    if weakest is None:
+        weakest = {"estimated_bde_kcal": 100, "label": "no weak C-H found", "confidence": "low"}
+
+    weakest["confidence"] = "low"  # 经验估算，非 DFT
+    return weakest
+
+
+def _assess_synthesizability(substrate, smarts_hits, similar_in_db, bde_info) -> dict:
+    """
+    综合评估：这个分子是否值得合成？
+
+    打分规则：
+    - 有已知类似底物 → +30
+    - BDE < 90 kcal/mol → +20
+    - 有明确自由基位点（SMARTS 匹配 > 1）→ +20
+    - 类似底物收率 > 50% → +20
+    - 无匹配无历史 → 扣分
+    """
+    score = 0
+    reasons = []
+
+    if similar_in_db and similar_in_db[0].get("yield_percent"):
+        score += 30
+        reasons.append(f"数据库中有类似底物（收率 {similar_in_db[0]['yield_percent']}%）")
+
+    bde = bde_info.get("estimated_bde_kcal", 100)
+    if bde < 90:
+        score += 20
+        reasons.append(f"存在弱 C-H 键（BDE ≈ {bde} kcal/mol，易于引发）")
+    elif bde < 96:
+        score += 10
+        reasons.append(f"C-H 键中等强度（BDE ≈ {bde} kcal/mol）")
+
+    if len(smarts_hits) >= 2:
+        score += 20
+        reasons.append(f"匹配 {len(smarts_hits)} 条自由基反应规则")
+    elif len(smarts_hits) == 1:
+        score += 10
+        reasons.append("匹配 1 条自由基反应规则")
+
+    if similar_in_db and similar_in_db[0].get("yield_percent", 0) > 50:
+        score += 20
+        reasons.append("类似底物收率 > 50%")
+
+    # 判断
+    if score >= 50:
+        worth = True
+        confidence = "high" if score >= 70 else "medium"
+    elif score >= 30:
+        worth = True
+        confidence = "low"
+    else:
+        worth = False
+        confidence = "low"
+
+    reason_text = "；".join(reasons) if reasons else "数据不足，建议通过 DFT 计算 BDE 确认"
+
+    return {
+        "worth_synthesizing": worth,
+        "confidence": confidence,
+        "score": score,
+        "reason": reason_text,
+    }
+
+
+print("[reaction_predictor] Ready with DB integration.")

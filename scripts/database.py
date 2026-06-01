@@ -179,9 +179,9 @@ def add_experiment(smiles: str, reaction_type: str = "", initiator: str = "",
                    catalyst: str = "", solvent: str = "", temperature: str = "",
                    yield_percent: float = None, D_mhz: float = None,
                    E_mhz: float = None, g_value: float = None,
-                   notes: str = "", source: str = "experiment",
+                   notes: str = "", source: str = "my_experiment",
                    substrate_name: str = "") -> int:
-    """添加一条实验记录"""
+    """添加一条记录。source = 'my_experiment' 或 'literature'"""
     conn = get_db()
     cur = conn.execute(
         """INSERT INTO experiments (smiles,substrate_name,reaction_type,initiator,catalyst,
@@ -193,20 +193,70 @@ def add_experiment(smiles: str, reaction_type: str = "", initiator: str = "",
     return cur.lastrowid
 
 
-def query_similar_substrates(smiles: str, limit: int = 5) -> list:
-    """查询数据库中与输入底物最相似的历史记录
+def add_literature(smiles: str, substrate_name: str = "", reaction_type: str = "",
+                   initiator: str = "", catalyst: str = "", solvent: str = "",
+                   temperature: str = "", yield_percent: float = None,
+                   D_mhz: float = None, E_mhz: float = None, g_value: float = None,
+                   notes: str = "") -> int:
+    """快捷添加文献数据（source 自动设为 'literature'）"""
+    return add_experiment(smiles=smiles, substrate_name=substrate_name,
+                          reaction_type=reaction_type, initiator=initiator,
+                          catalyst=catalyst, solvent=solvent,
+                          temperature=temperature, yield_percent=yield_percent,
+                          D_mhz=D_mhz, E_mhz=E_mhz, g_value=g_value,
+                          notes=notes, source="literature")
 
-    使用 RDKit 子结构匹配 + Tanimoto 相似度排序
-    """
+
+def add_my_experiment(smiles: str, substrate_name: str = "", reaction_type: str = "",
+                      initiator: str = "", catalyst: str = "", solvent: str = "",
+                      temperature: str = "", yield_percent: float = None,
+                      D_mhz: float = None, E_mhz: float = None, g_value: float = None,
+                      notes: str = "") -> int:
+    """快捷添加自己的实验数据（source 自动设为 'my_experiment'）"""
+    return add_experiment(smiles=smiles, substrate_name=substrate_name,
+                          reaction_type=reaction_type, initiator=initiator,
+                          catalyst=catalyst, solvent=solvent,
+                          temperature=temperature, yield_percent=yield_percent,
+                          D_mhz=D_mhz, E_mhz=E_mhz, g_value=g_value,
+                          notes=notes, source="my_experiment")
+
+
+def get_db_stats() -> dict:
+    """返回数据库统计：文献 vs 自己实验各多少条"""
+    conn = get_db()
+    total = conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
+    lit = conn.execute("SELECT COUNT(*) FROM experiments WHERE source='literature'").fetchone()[0]
+    my = conn.execute("SELECT COUNT(*) FROM experiments WHERE source='my_experiment'").fetchone()[0]
+    other = total - lit - my
+    return {"total": total, "literature": lit, "my_experiment": my, "other": other}
+
+
+def query_by_source(source: str, limit: int = 100) -> list:
+    """按来源查询：'literature' 或 'my_experiment'"""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM experiments WHERE source=? ORDER BY date_added DESC LIMIT ?",
+        (source, limit)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def query_similar_substrates(smiles: str, limit: int = 5,
+                              source: str = "all") -> list:
+    """查询库中与输入底物最相似的记录。
+    source: 'all' | 'literature' | 'my_experiment'"""
     from rdkit import Chem
     from rdkit.Chem import DataStructs, AllChem
 
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, smiles, substrate_name, reaction_type, initiator, "
-        "catalyst, solvent, temperature, yield_percent, D_mhz, E_mhz, "
-        "g_value, notes, source FROM experiments ORDER BY date_added DESC LIMIT 500"
-    ).fetchall()
+    if source == "all":
+        rows = conn.execute(
+            "SELECT * FROM experiments ORDER BY date_added DESC LIMIT 500"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM experiments WHERE source=? ORDER BY date_added DESC LIMIT 500",
+            (source,)
+        ).fetchall()
 
     if not rows:
         return []

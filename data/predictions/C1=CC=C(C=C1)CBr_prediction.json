@@ -1,0 +1,90 @@
+{
+  "smiles": "C1=CC=C(C=C1)CBr",
+  "substrate": {
+    "smiles": "C1=CC=C(C=C1)CBr",
+    "formula": "C7H7Br",
+    "molecular_weight": 171.04,
+    "rotatable_bonds": 1,
+    "hbd": 0,
+    "hba": 0,
+    "reactive_sites": [
+      {
+        "site": "C6 (benzylic)",
+        "type": "benzylic_C-H",
+        "atom_index": 6,
+        "reactivity": "high",
+        "suggested_reaction": "HAT or radical functionalization",
+        "note": "Benzylic C-H: weak BDE ~85-90 kcal/mol"
+      },
+      {
+        "site": "C7-Br",
+        "type": "carbon_halogen_bond",
+        "atom_index": 7,
+        "reactivity": "high",
+        "suggested_reaction": "atom_transfer or radical_cyclization",
+        "note": "C-Br bond: good radical precursor"
+      }
+    ],
+    "n_reactive_sites": 2
+  },
+  "smarts_matches": [
+    {
+      "id": 1,
+      "name": "C-Br_bond",
+      "smarts": "[CX4][Br]",
+      "reaction_family": "atom_transfer",
+      "description": "sp3 C-Br: excellent radical precursor"
+    },
+    {
+      "id": 4,
+      "name": "benzylic_CH",
+      "smarts": "[c][CH2]",
+      "reaction_family": "HAT",
+      "description": "Benzylic C-H: BDE ~85-90 kcal/mol"
+    }
+  ],
+  "reaction_families": [
+    "atom_transfer",
+    "HAT"
+  ],
+  "similar_in_db": [
+    {
+      "id": 1,
+      "smiles": "C1=CC=C(C=C1)CBr",
+      "substrate_name": "benzyl bromide",
+      "reaction_type": "HAT",
+      "initiator": "AIBN",
+      "catalyst": "Ru(bpy)3",
+      "solvent": "Toluene",
+      "temperature": "80 C",
+      "yield_percent": 72.0,
+      "D_mhz": 302.55,
+      "E_mhz": 30.82,
+      "g_value": 2.0006,
+      "notes": "EPR ZFS fitting, S=1 biradical",
+      "source": "experiment"
+    }
+  ],
+  "recommended_conditions": {
+    "initiator": "AIBN",
+    "solvent": "Toluene",
+    "temperature": "80 C",
+    "catalyst": "Ru(bpy)3",
+    "yield_reference": 72.0,
+    "source": "Database: benzyl bromide (Tanimoto + substructure match)"
+  },
+  "bde_estimate": {
+    "site": "C3",
+    "smarts": "[c][CH2]",
+    "estimated_bde_kcal": 88,
+    "label": "benzylic C-H",
+    "n_matches": 1,
+    "confidence": "low"
+  },
+  "decision": {
+    "worth_synthesizing": true,
+    "confidence": "high",
+    "score": 90,
+    "reason": "\u6570\u636e\u5e93\u4e2d\u6709\u7c7b\u4f3c\u5e95\u7269\uff08\u6536\u7387 72.0%\uff09\uff1b\u5b58\u5728\u5f31 C-H \u952e\uff08BDE \u2248 88 kcal/mol\uff0c\u6613\u4e8e\u5f15\u53d1\uff09\uff1b\u5339\u914d 2 \u6761\u81ea\u7531\u57fa\u53cd\u5e94\u89c4\u5219\uff1b\u7c7b\u4f3c\u5e95\u7269\u6536\u7387 > 50%"
+  }
+}

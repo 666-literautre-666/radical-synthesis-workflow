@@ -450,9 +450,11 @@ def _estimate_bde(smiles: str) -> dict:
     # 苄位 ~88, 烯丙位 ~86, 三级 C-H ~96, 醛 ~87
 
     bde_rules = [
-        ("[c][CH2]", 88, "benzylic C-H"),
+        ("[c][CH3]", 89, "benzylic methyl C-H"),
+        ("[c][CH2]", 88, "benzylic methylene C-H"),
         ("[c][CH]([C])[C]", 85, "benzylic tertiary C-H"),
-        ("[C]=[C][CH2]", 86, "allylic C-H"),
+        ("[C]=[C][CH3]", 87, "allylic methyl C-H"),
+        ("[C]=[C][CH2]", 86, "allylic methylene C-H"),
         ("[CX3H1](=O)", 87, "aldehyde C-H"),
         ("[CH]([C])([C])[C]", 96, "tertiary C-H"),
         ("[CH2]([C])[C]", 98, "secondary C-H"),
@@ -465,7 +467,7 @@ def _estimate_bde(smiles: str) -> dict:
         if pattern and mol.HasSubstructMatch(pattern):
             matches = mol.GetSubstructMatches(pattern)
             if matches:
-                if weakest is None or bde < weakest["bde"]:
+                if weakest is None or bde < weakest["estimated_bde_kcal"]:
                     weakest = {
                         "site": f"C{matches[0][0]}",
                         "smarts": smarts,

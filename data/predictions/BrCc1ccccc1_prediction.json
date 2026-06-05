@@ -1,0 +1,159 @@
+{
+  "smiles": "BrCc1ccccc1",
+  "substrate": {
+    "smiles": "BrCc1ccccc1",
+    "formula": "C7H7Br",
+    "molecular_weight": 171.04,
+    "rotatable_bonds": 1,
+    "hbd": 0,
+    "hba": 0,
+    "reactive_sites": [
+      {
+        "site": "C0-Br",
+        "type": "carbon_halogen_bond",
+        "atom_index": 0,
+        "reactivity": "high",
+        "suggested_reaction": "atom_transfer or radical_cyclization",
+        "note": "C-Br bond: good radical precursor"
+      },
+      {
+        "site": "C1 (benzylic)",
+        "type": "benzylic_C-H",
+        "atom_index": 1,
+        "reactivity": "high",
+        "suggested_reaction": "HAT or radical functionalization",
+        "note": "Benzylic C-H: weak BDE ~85-90 kcal/mol"
+      }
+    ],
+    "n_reactive_sites": 2
+  },
+  "smarts_matches": [
+    {
+      "id": 1,
+      "name": "C-Br_bond",
+      "smarts": "[CX4][Br]",
+      "reaction_family": "atom_transfer",
+      "description": "sp3 C-Br: excellent radical precursor"
+    },
+    {
+      "id": 4,
+      "name": "benzylic_CH",
+      "smarts": "[c][CH2]",
+      "reaction_family": "HAT",
+      "description": "Benzylic C-H: BDE ~85-90 kcal/mol"
+    }
+  ],
+  "reaction_families": [
+    "HAT",
+    "atom_transfer"
+  ],
+  "similar_in_db": [
+    {
+      "id": 4,
+      "smiles": "BrCc1ccccc1",
+      "substrate_name": "\u6d4b\u8bd5-\u6eb4\u5316\u82c4",
+      "reaction_type": "ATRP",
+      "initiator": "AIBN",
+      "catalyst": "",
+      "solvent": "",
+      "temperature": "",
+      "yield_percent": 78.0,
+      "D_mhz": null,
+      "E_mhz": null,
+      "g_value": null,
+      "notes": "\u6d4b\u8bd5\u6570\u636e",
+      "source": "my_experiment",
+      "date_added": "2026-06-02 03:07:00"
+    },
+    {
+      "id": 5,
+      "smiles": "C1=CC=C(C=C1)CBr",
+      "substrate_name": "\u6d4b\u8bd5-\u6587\u732e\u6eb4\u5316\u82c4",
+      "reaction_type": "atom_transfer",
+      "initiator": "",
+      "catalyst": "",
+      "solvent": "",
+      "temperature": "",
+      "yield_percent": 85.0,
+      "D_mhz": null,
+      "E_mhz": null,
+      "g_value": null,
+      "notes": "\u6d4b\u8bd5\u6587\u732e\u6570\u636e",
+      "source": "literature",
+      "date_added": "2026-06-02 03:07:00"
+    },
+    {
+      "id": 3,
+      "smiles": "C1=CC=C(C=C1)CBr",
+      "substrate_name": "benzyl bromide",
+      "reaction_type": "HAT",
+      "initiator": "AIBN",
+      "catalyst": "",
+      "solvent": "Toluene",
+      "temperature": "80 C",
+      "yield_percent": 72.0,
+      "D_mhz": 302.55,
+      "E_mhz": 30.82,
+      "g_value": 2.0006,
+      "notes": "EPR ZFS fitting",
+      "source": "my_experiment",
+      "date_added": "2026-06-01 07:07:18"
+    },
+    {
+      "id": 1,
+      "smiles": "C1=CC=C(C=C1)CBr",
+      "substrate_name": "benzyl bromide",
+      "reaction_type": "HAT",
+      "initiator": "AIBN",
+      "catalyst": "Ru(bpy)3",
+      "solvent": "Toluene",
+      "temperature": "80 C",
+      "yield_percent": 72.0,
+      "D_mhz": 302.55,
+      "E_mhz": 30.82,
+      "g_value": 2.0006,
+      "notes": "EPR ZFS fitting, S=1 biradical",
+      "source": "experiment",
+      "date_added": "2026-06-01 06:32:00"
+    },
+    {
+      "id": 2,
+      "smiles": "C1=CC=C(C=C1)CI",
+      "substrate_name": "benzyl iodide",
+      "reaction_type": "HAT",
+      "initiator": "AIBN",
+      "catalyst": "",
+      "solvent": "Toluene",
+      "temperature": "80 C",
+      "yield_percent": 85.0,
+      "D_mhz": 295.0,
+      "E_mhz": 33.0,
+      "g_value": 2.0002,
+      "notes": "JACS 2024, 146, 12-15 (\u793a\u4f8b)",
+      "source": "literature",
+      "date_added": "2026-06-01 07:07:18"
+    }
+  ],
+  "recommended_conditions": {
+    "initiator": "AIBN",
+    "solvent": "",
+    "temperature": "",
+    "catalyst": "",
+    "yield_reference": 78.0,
+    "source": "Database: \u6d4b\u8bd5-\u6eb4\u5316\u82c4 (Tanimoto + substructure match)"
+  },
+  "bde_estimate": {
+    "site": "C2",
+    "smarts": "[c][CH2]",
+    "estimated_bde_kcal": 88,
+    "label": "benzylic methylene C-H",
+    "n_matches": 1,
+    "confidence": "low"
+  },
+  "decision": {
+    "worth_synthesizing": true,
+    "confidence": "high",
+    "score": 90,
+    "reason": "\u6570\u636e\u5e93\u4e2d\u6709\u7c7b\u4f3c\u5e95\u7269\uff08\u6536\u7387 78.0%\uff09\uff1b\u5b58\u5728\u5f31 C-H \u952e\uff08BDE \u2248 88 kcal/mol\uff0c\u6613\u4e8e\u5f15\u53d1\uff09\uff1b\u5339\u914d 2 \u6761\u81ea\u7531\u57fa\u53cd\u5e94\u89c4\u5219\uff1b\u7c7b\u4f3c\u5e95\u7269\u6536\u7387 > 50%"
+  }
+}

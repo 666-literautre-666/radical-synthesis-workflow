@@ -26,17 +26,17 @@
     ],
     "n_reactive_sites": 2
   },
-  "target": "radical cyclization with alkene",
+  "target": "ATRP",
   "recommended_reaction_types": [
     "atom_transfer",
     "radical_cyclization",
     "hydrogen_atom_transfer"
   ],
   "recommended_initiators": [
+    "AIBN",
     "TBHP",
-    "DTBP",
     "ACCN",
-    "AIBN"
+    "DTBP"
   ],
   "recommended_catalysts": [
     "Cu(I)/PMDETA",

@@ -1,4 +1,27 @@
+# Python
 __pycache__/
 *.pyc
+
+# Claude / IDE
 .claude/
 .cc-connect/
+
+# 数据库（含你的个人实验数据，不上传）
+data/radical_db.sqlite
+
+# ORCA 临时文件（大文件，无用）
+data/orca_inputs/*.gbw
+data/orca_inputs/*.bas*
+data/orca_inputs/*.tmp
+data/orca_inputs/*.SHARKINP.tmp
+data/orca_outputs/
+
+# Gaussian 输出（太大）
+data/gaussian_outputs/
+
+# 你自己的实验数据
+data/experimental/
+
+# 操作系统
+.DS_Store
+Thumbs.db

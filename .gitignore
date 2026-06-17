@@ -22,6 +22,14 @@ data/gaussian_outputs/
 # 你自己的实验数据
 data/experimental/
 
+# 大文件
+data/bde_rdf_with_multi_halo_model_2.csv.gz
+data/bde_rdf_with_multi_halo_model_2.csv/
+data/BDE-db2.zip
+data/orca_inputs/product_nmr_test.*
+bde_agent/bde_model.pt
+*.pt
+
 # 操作系统
 .DS_Store
 Thumbs.db

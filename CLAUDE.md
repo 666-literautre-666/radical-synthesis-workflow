@@ -43,6 +43,29 @@ This is a semi-automated research workflow for a graduate student (研一) in ra
 - **持续积累**：每做一次实验、每读一篇文献都录入，数据库越大预测越准
 - **反馈闭环**：实验结果反哺预测引擎，score 越来越可信
 
+### 阶段六：机器学习增强（GNN 图神经网络）
+
+用图神经网络替代经验规则，提升预测精度。RTX 3070 8GB 跑分子 GNN 完全够用（参数量 ~10^5，远小于 LLM）。
+
+**三个应用场景（按优先级排）**：
+
+| 场景 | 输入 | 输出 | 训练数据 | 润色哪个模块 |
+|------|------|------|---------|------------|
+| **BDE 预测** | 分子图 | 每根键的 BDE | iBonD / BDE-db 公开数据 | 替代 `_estimate_bde()` |
+| **反应收率预测** | 底物 + 条件 | 预测收率 % | 自积累：`add_my_experiment()` + 文献 | 替代 `_assess_synthesizability()` |
+| **NMR/EPR 预测** | 分子图 | 化学位移 / g 值 | NMRShiftDB2 / 公开 EPR 数据 | 增强 `predict_nmr_from_smiles()` / `predict_g_value()` |
+
+**技术栈**：
+- Chemprop (MIT) — 分子 GNN，API 简洁，几行代码跑通
+- 或 PyG (PyTorch Geometric) — 更灵活，自定义模型
+- RDKit 做分子图特征化
+
+**GNN 在项目中的角色**：
+- 不是替代现有规则引擎，而是**与 SMARTS 规则互补**
+- SMARTS 负责"识别反应类型"（定性），GNN 负责"预测数值"（定量）
+- 数据库（阶段五）直接为 GNN 提供训练数据 → **数据越多，模型越准**
+- 训练脚本放 `ml/` 目录，训好的模型权重存 `ml/models/`
+
 ## Key modules
 
 | 阶段 | Module | 核心 API |
@@ -58,6 +81,8 @@ This is a semi-automated research workflow for a graduate student (研一) in ra
 | 📐 ZFS | `scripts/zfs_fitter.py` | `fit_zfs_from_csv(csv, S=1, mw_freq=9.5)`, `simulate_zfs(S, D, E, g)`, `check_environment()` |
 | 🎨 出图 | `scripts/plot_utils.py` | `ChemFigure(name, journal, width)` 上下文管理器, `save_figure(fig, name)`, `get_plot_history(n)` |
 | 🎨 出图 | `scripts/journal_plot.py` | `draw_molecule_inset(ax, smiles)`, `simulate_multiplet(...)`, `nmr_multipanel(...)` |
+| 🤖 ML | `ml/bde_predictor.py` | `train_bde_model()`, `predict_bde(smiles)`, `evaluate_model()` |
+| 🤖 ML | `ml/yield_predictor.py` | `train_yield_model()`, `predict_yield(smiles, conditions)` |
 
 ## Plotting conventions (CRITICAL)
 
@@ -112,8 +137,33 @@ When the user asks about ZFS fitting / EPR simulation / EasySpin, use these path
 - ✅ Step 3 — ORCA 接口：NMR/EPR/opt 输入生成 + 输出解析
 - ✅ Step 4 — 谱图预测：NMR/MS/ESR 全覆盖 + 实验对比
 - ✅ Step 5 — ZFS 拟合：EasySpin + Octave 桥接
+- 🔜 待开发：阶段六 GNN 模块 — BDE 预测 + 收率预测
 - 🔜 待开发：UV-Vis 预测模块
 - 🔜 待完善：SMARTS 规则扩充（随实验积累持续添加）
+- 🔜 待完善：数据库积累到 500+ 条后启动 GNN 训练
+
+## 学习进度日志
+
+### 2026-06-14 (周六)
+- 🧠 DL: 独立默写训练循环5行 ✅
+- 🧠 DL: 完整解释 BDE MLP 代码每一行（90%准确）✅
+- 🧠 DL: 亲眼见证过拟合——训练 Loss=0.0002，新分子预测偏差 54 kcal/mol ✅
+- 🐍 Python: 第19题完成（字典分组+引发剂排名+最佳底物）✅
+- 🔧 ZFS: 帮师姐完成 EasySpin ZFS 拟合（S=1不匹配，判定为S=1/2自由基）
+- 📡 AI4Chem: ALFABET 已覆盖含卤素/硫 BDE预测（2024扩展版），TITO加速MD 10000倍
+
+## 每日 AI4Chem 前沿追踪
+
+**规则：** 每次对话开始时，自动搜索过去 24 小时内 AI4Chem（AI+化学/制药/材料/自由基）的最新进展，用 5 行以内简报通知用户。
+
+**关注方向：**
+- AI 预测化学反应（BDE/收率/选择性/产物分布）
+- 图神经网络（GNN）在分子性质预测中的新方法
+- AI 辅助自由基化学/光催化/ATRP
+- 开源化学 AI 工具和预训练模型
+- AI 制药公司融资/产品/招聘动态
+
+**搜索关键词：** `AI chemistry machine learning drug discovery GNN molecular property latest 2026`
 
 ## 快速命令参考
 

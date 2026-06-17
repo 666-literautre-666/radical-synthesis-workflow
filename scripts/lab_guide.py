@@ -88,8 +88,8 @@ EXTRACTION_GUIDE = {
     "very_polar": (-99, 0.5, "水溶性产物", "正丁醇萃取 或 直接浓缩后柱层析"),
     "polar": (0.5, 1.5, "乙酸乙酯", "DCM:IPA=9:1"),
     "medium": (1.5, 3.0, "二氯甲烷 (DCM)", "乙酸乙酯"),
-    "nonpolar": (3.0, 5.0, "乙醚 或 石油醚", "正己烷"),
-    "very_nonpolar": (5.0, 99, "正己烷 或 石油醚", "戊烷"),
+    "nonpolar": (3.0, 5.0, "二氯甲烷 (DCM)", "石油醚"),
+    "very_nonpolar": (5.0, 99, "二氯甲烷 (DCM) 或 石油醚", "正己烷"),
 }
 
 # 官能团安全警告
@@ -114,6 +114,92 @@ NMR_SOLVENT_GUIDE = [
     ("仅溶于水", "D2O", "4.79 (1H)"),
     ("logP > 5 非极性", "CDCl3 或 Benzene-d6", "—"),
 ]
+
+
+# ---------------------------------------------------------------------------
+# 溶剂相关过柱技巧
+# ---------------------------------------------------------------------------
+
+SOLVENT_COLUMN_TIPS = {
+    "DMF": {
+        "issue": "DMF 沸点高 (153°C)、极性大，残留会干扰柱层析",
+        "fix": [
+            "柱层析前彻底除 DMF：水洗 3 次 + 饱和食盐水洗 1 次",
+            "旋蒸后用 EtOAc 共沸带出残留 DMF（×2~3 次）",
+            "若含胺类产物：硅胶柱用 1% Et3N 预活化（冲 2 CV 含 1% Et3N 的洗脱剂，再用中性洗脱剂冲 2 CV）",
+            "原因：DMF 常含微量二甲胺（碱性），硅胶酸性位点会强烈吸附碱性产物导致拖尾",
+        ],
+    },
+    "DMSO": {
+        "issue": "DMSO 沸点 189°C，极难除净",
+        "fix": [
+            "水洗 5 次以上除去 DMSO（DMSO 与水互溶）",
+            "若产物水溶性好：不萃取，直接浓缩后柱层析，用 EtOAc 共沸带 DMSO",
+            "残留 DMSO 在柱子上会拖慢所有组分，需先用低极性洗脱剂冲干净 DMSO",
+        ],
+    },
+    "DCM": {"issue": "", "fix": []},  # 无特殊问题
+    "THF": {
+        "issue": "THF 含 BHT 稳定剂（抗氧化剂），过柱后会留在产物里",
+        "fix": ["THF 需新鲜蒸馏或用无稳定剂 THF", "若有 BHT 残留：柱层析可分离（BHT 极性低先出）"],
+    },
+    "Toluene": {"issue": "", "fix": []},
+    "MeCN": {"issue": "", "fix": []},
+    "Water": {"issue": "", "fix": []},
+    "Benzene": {"issue": "苯剧毒", "fix": ["尽量避免使用苯，用甲苯替代"]},
+}
+
+
+def _get_column_modifier_tips(smiles: str) -> list[str]:
+    """
+    根据分子结构判断是否需要 Et3N/AcOH 等柱层析改性剂。
+    """
+    tips = []
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return tips
+
+    # 检测碱性官能团（含 N 的胺、含氮杂环）
+    amine = Chem.MolFromSmarts("[NX3;H2,H1,H0]")  # 胺
+    pyridine = Chem.MolFromSmarts("c1ncccc1")       # 吡啶类
+    imidazole = Chem.MolFromSmarts("c1nccn1")       # 咪唑类
+
+    has_basic = False
+    if amine and mol.HasSubstructMatch(amine):
+        has_basic = True
+    if pyridine and mol.HasSubstructMatch(pyridine):
+        has_basic = True
+    if imidazole and mol.HasSubstructMatch(imidazole):
+        has_basic = True
+
+    if has_basic:
+        tips.append(
+            "产物含碱性基团（胺/含氮杂环）："
+            "洗脱剂中加 0.5-1% Et3N 防拖尾，"
+            "或先用含 1% Et3N 的洗脱剂冲 2 CV 预活化硅胶柱"
+        )
+
+    # 检测酸性官能团
+    carboxylic = Chem.MolFromSmarts("C(=O)O")       # 羧酸
+    phenol = Chem.MolFromSmarts("cO")                # 酚羟基
+    sulfonic = Chem.MolFromSmarts("S(=O)(=O)O")      # 磺酸
+
+    has_acidic = False
+    if carboxylic and mol.HasSubstructMatch(carboxylic):
+        has_acidic = True
+    if phenol and mol.HasSubstructMatch(phenol):
+        has_acidic = True
+    if sulfonic and mol.HasSubstructMatch(sulfonic):
+        has_acidic = True
+
+    if has_acidic:
+        tips.append(
+            "产物含酸性基团（羧酸/酚）："
+            "洗脱剂中加 1-2% AcOH 防拖尾，"
+            "或用 DCM-MeOH 体系替代 PE-EtOAc"
+        )
+
+    return tips
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +249,8 @@ def _recommend_extraction(logp: float) -> dict:
 
 
 def _recommend_purification(mol, logp: float, physical_state: str,
-                            reaction_type: str, contains_metal: bool) -> dict:
+                            reaction_type: str, contains_metal: bool,
+                            is_radical: bool = True) -> dict:
     """推荐纯化方法"""
     mw = Descriptors.MolWt(mol)
     rot_bonds = Descriptors.NumRotatableBonds(mol)
@@ -175,16 +262,15 @@ def _recommend_purification(mol, logp: float, physical_state: str,
     if contains_metal:
         steps.append("1. 先过短硅胶柱或中性 Al2O3 柱除去金属")
 
-    # 物理状态判断（自由基产物一般不稳定，尽量避免加热）
-    if "solid" in physical_state and mw < 600:
-        method = "重结晶"
-        steps.append("2. 重结晶: 室温下用少量良溶剂溶解 → 缓慢加不良溶剂 → 冰箱过夜")
+    # 纯化方法推荐（自由基化学优先柱层析，避免重结晶加热）
+    mol_hbd = Descriptors.NumHDonors(mol)
+    mol_hba = Descriptors.NumHAcceptors(mol)
+    if "solid" in physical_state and mw < 600 and (mol_hbd + mol_hba) <= 2 and rot_bonds <= 3:
+        # 只有简单小分子固体才推荐重结晶
+        method = "重结晶（或柱层析）"
+        steps.append("2. 可尝试重结晶: DCM 溶解 → 缓慢加石油醚至浑浊 → 冰箱静置")
+        steps.append("   若重结晶不析出 → 改用柱层析（见下）")
         steps.append("   注意：避免加热溶解（自由基产物可能热分解）")
-        if logp < 2:
-            steps.append("   推荐: DCM/Et2O 溶解 → 缓慢加正己烷至浑浊 → 冰箱静置")
-        else:
-            steps.append("   推荐: DCM 溶解 → 缓慢加石油醚至浑浊 → 冰箱静置")
-        steps.append("   备选：打浆（加少量乙醚或正己烷研磨）")
     elif "solid" in physical_state and mw >= 600:
         method = "柱层析"
         steps.append("2. 硅胶柱层析 (200-300 目硅胶)")
@@ -196,18 +282,31 @@ def _recommend_purification(mol, logp: float, physical_state: str,
             steps.append("   洗脱剂: 纯石油醚 → 石油醚:乙酸乙酯 = 20:1 梯度")
         steps.append("   若 RF 值 < 0.2: 加大乙酸乙酯比例，或加 1% Et3N")
         steps.append("   若拖尾严重: 加 1% AcOH 或更换为 DCM-MeOH 体系")
+    # 默认柱层析（芳香/多官能团产物过柱最可靠）
+    if steps:  # 已有金属去除步骤
+        steps.append("")
     else:
-        # 液体产物：不推荐蒸馏（自由基产物怕热），默认柱层析
-        method = "柱层析（不推荐蒸馏，自由基产物热不稳定）"
-        steps.append("2. 硅胶柱层析 (200-300 目硅胶)")
-        if logp < 1.5:
-            steps.append("   洗脱剂: 乙酸乙酯:石油醚 = 1:3 → 1:1 梯度")
-        elif logp < 3:
-            steps.append("   洗脱剂: 乙酸乙酯:石油醚 = 1:10 → 1:5 梯度")
-        else:
-            steps.append("   洗脱剂: 纯石油醚 → 石油醚:乙酸乙酯 = 20:1 梯度")
-        steps.append("   若 RF 值 < 0.2: 加大乙酸乙酯比例，或加 1% Et3N")
+        # 无金属去除
+        pass
+
+    if is_radical:
+        method = method if method else "柱层析（不推荐蒸馏，自由基产物热不稳定）"
+    else:
+        method = method if method else "柱层析"
+
+    steps.append(f"{'2' if not contains_metal else ''} 硅胶柱层析 (200-300 目硅胶)".lstrip())
+    if logp < 1.5:
+        steps.append("   洗脱剂: PE:DCM=3:1 → DCM 梯度 或 EtOAc:PE=1:3 → 1:1")
+    elif logp < 3:
+        steps.append("   洗脱剂: PE:DCM=5:1 → 3:1 梯度 或 PE:EtOAc=10:1 → 5:1")
+    else:
+        steps.append("   洗脱剂: PE:DCM=10:1 → 5:1 梯度 或 纯PE → PE:EtOAc=20:1")
+    steps.append("   若含碱性基团: 加 0.5-1% Et3N 防拖尾")
+    steps.append("   TLC 监控，目标 Rf=0.2-0.3，合并纯品旋蒸")
+    if is_radical:
         steps.append("   产物旋蒸时水浴温度 ≤30°C，避免长时间加热")
+    else:
+        steps.append("   旋蒸温度常规操作即可")
 
     return {"method": method, "steps": steps}
 
@@ -300,7 +399,8 @@ def _estimate_scale_notes(reaction_type: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def lab_guide(product_smiles: str, reaction_type: str = "HAT",
-              scale: str = "0.5 mmol") -> dict:
+              scale: str = "0.5 mmol", include_orca: bool = False,
+              is_radical: bool = True) -> dict:
     """
     输入产物 SMILES + 反应类型 → 输出完整实验流程建议。
 
@@ -373,24 +473,41 @@ def lab_guide(product_smiles: str, reaction_type: str = "HAT",
 
     # 6. 纯化
     purification = _recommend_purification(
-        mol_unh, logp, physical_state, reaction_type, contains_metal
+        mol_unh, logp, physical_state, reaction_type, contains_metal, is_radical
     )
 
     # 如果产物极性特别大且不是固体，建议打浆
     if logp < 0.5 and "solid" not in physical_state:
         purification["alternative"] = "可尝试打浆（加不良溶剂研磨）: 加少量乙醚或正己烷研磨产物"
 
-    # 7. 干燥（自由基产物: 低温旋蒸，避免加热）
+    # 6b. 柱层析改性剂建议（检测碱性/酸性官能团）
+    modifier_tips = _get_column_modifier_tips(product_smiles)
+    if modifier_tips:
+        purification["modifier_tips"] = modifier_tips
+
+    # 7. 干燥
     if physical_state in ("liquid", "likely_liquid"):
-        drying = (
-            "旋蒸浓缩时水浴 ≤30°C → 减压油泵抽干 (0.1-1 mmHg, RT, 1-2 h) "
-            "→ N2 回填 → 称重。注意：自由基产物避免长时间加热！"
-        )
+        if is_radical:
+            drying = (
+                "旋蒸浓缩时水浴 ≤30°C → 减压油泵抽干 (0.1-1 mmHg, RT, 1-2 h) "
+                "→ N2 回填 → 称重。注意：自由基产物避免长时间加热！"
+            )
+        else:
+            drying = (
+                "旋蒸浓缩 (水浴 ≤40°C) → 减压油泵抽干 (0.1-1 mmHg, RT, 1-2 h) "
+                "→ 称重。非自由基产物正常操作即可。"
+            )
     else:
-        drying = (
-            "旋蒸浓缩时水浴 ≤30°C → 油泵抽干至恒重 (0.1-1 mmHg, RT, 2-4 h) "
-            "→ 称重 → 计算收率。固体产物可用冷正己烷洗涤除杂。"
-        )
+        if is_radical:
+            drying = (
+                "旋蒸浓缩时水浴 ≤30°C → 油泵抽干至恒重 (0.1-1 mmHg, RT, 2-4 h) "
+                "→ 称重 → 计算收率。固体产物可用冷正己烷洗涤除杂。"
+            )
+        else:
+            drying = (
+                "旋蒸浓缩 → 油泵抽干至恒重 (0.1-1 mmHg, RT, 2-4 h) "
+                "→ 称重 → 计算收率。可真空干燥箱 40°C 过夜。"
+            )
 
     # 8. 表征
     nmr_solvent = _recommend_nmr_solvent(mol, logp)
@@ -401,6 +518,27 @@ def lab_guide(product_smiles: str, reaction_type: str = "HAT",
         "ms": "ESI-MS (若含可电离基团) 或 EI-MS (若 MW < 400 且不含可电离基团)",
         "ir": "若产物为固体且有 C=O/OH/NH 官能团，测 IR 确认官能团",
     }
+
+    # ORCA DFT 预测（可选，耗时较长）
+    orca_info = {}
+    if include_orca:
+        try:
+            from scripts.orca_interface import build_nmr_input, build_epr_input
+            nmr_inp = build_nmr_input(product_smiles)
+            epr_inp = build_epr_input(product_smiles)
+            orca_info = {
+                "nmr_input": "NMR 输入文件已生成，运行 ORCA 后可得精确化学位移",
+                "epr_input": "EPR 输入文件已生成，运行 ORCA 后可得 g 张量 + 超精细耦合",
+                "note": ("ORCA DFT 计算耗时较长（数小时），建议后台运行。\n"
+                         f"  NMR: C:/ORCA_6.1.1/orca.exe {product_smiles[:20]}_nmr.inp > {product_smiles[:20]}_nmr.out\n"
+                         "  EPR: 同上，替换为 _epr 文件"),
+                "functional": "建议泛函: B3LYP (NMR), PBE0 (EPR)",
+                "basis": "建议基组: pcSseg-2 (NMR), def2-TZVP (EPR)",
+            }
+        except Exception as e:
+            orca_info = {"error": f"ORCA 输入生成失败: {e}"}
+
+    characterization["orca"] = orca_info
 
     # 9. 安全警告
     safety_warnings = _detect_dangers(mol)
@@ -491,17 +629,36 @@ def print_guide(guide: dict):
 # 统一入口：链接 lab_guide + reaction_predictor + database
 # ---------------------------------------------------------------------------
 
+def _auto_detect_reaction_type(smarts_hits: list) -> str:
+    """根据 SMARTS 匹配结果自动判断主要反应类型"""
+    families = [h["reaction_family"] for h in smarts_hits]
+    if not families:
+        return "HAT"  # 默认
+
+    from collections import Counter
+    count = Counter(families)
+
+    # 按优先级：atom_transfer（最确定）> HAS > radical_addition > HAT > SET
+    priority = ["atom_transfer", "HAS", "radical_addition", "radical_cyclization", "HAT", "SET", "spin_trap"]
+    for p in priority:
+        if p in count:
+            return p
+    return families[0]
+
+
 def full_guide(product_smiles: str, substrate_smiles: str = None,
-                reaction_type: str = "HAT", scale: str = "0.5 mmol") -> dict:
+                reaction_type: str = None, scale: str = "0.5 mmol",
+                include_orca: bool = False) -> dict:
     """
     一站式实验指南：预测 + 操作 + 安全全覆盖。
 
-    输入产物 SMILES → 自动分析底物 → 匹配规则 → 推荐条件 → 给出实验操作。
+    输入产物 SMILES → 自动分析底物 → 自动识别反应类型 →
+    匹配规则 → 推荐条件 → 给出实验操作。
 
     参数:
         product_smiles: 目标产物 SMILES
         substrate_smiles: 底物 SMILES，不提供则用 product_smiles 作为底物
-        reaction_type: 反应类型
+        reaction_type: 手动指定反应类型。不指定则自动识别
         scale: 反应规模
 
     返回:
@@ -509,41 +666,49 @@ def full_guide(product_smiles: str, substrate_smiles: str = None,
     """
     sub_smiles = substrate_smiles or product_smiles
 
+    # --- 阶段一：底物分析 ---
+    substrate = analyze_substrate(sub_smiles)
+
+    # --- 阶段二：SMARTS 规则匹配 ---
+    smarts_hits = get_smarts_matches(sub_smiles)
+
+    # --- 阶段三：自动识别反应类型 ---
+    if reaction_type is None:
+        reaction_type = _auto_detect_reaction_type(smarts_hits)
+
     result = {
         "product_smiles": product_smiles,
         "substrate_smiles": sub_smiles,
         "reaction_type": reaction_type,
+        "auto_detected": (reaction_type is None or reaction_type == _auto_detect_reaction_type(smarts_hits)),
         "scale": scale,
     }
 
-    # --- 阶段一：底物分析 ---
-    substrate = analyze_substrate(sub_smiles)
     result["substrate_analysis"] = substrate
-
-    # --- 阶段二：SMARTS 规则匹配 ---
-    smarts_hits = get_smarts_matches(sub_smiles)
     result["smarts_matches"] = smarts_hits
     result["reaction_families"] = list(set(h["reaction_family"] for h in smarts_hits))
 
-    # --- 阶段三：BDE 估算 ---
+    # --- 阶段四：BDE 估算 ---
     bde_info = _estimate_bde(sub_smiles)
     result["bde_estimate"] = bde_info
 
-    # --- 阶段四：数据库相似底物 ---
+    # --- 阶段五：数据库相似底物 ---
     try:
         similar = query_similar_substrates(sub_smiles, limit=5)
     except Exception:
         similar = []
     result["similar_in_db"] = similar
 
-    # --- 阶段五：反应条件推荐 ---
+    # --- 阶段六：反应条件推荐 ---
     route = suggest_reaction_routes(sub_smiles, reaction_type)
     result["recommended_initiators"] = route.get("recommended_initiators", [])
     result["recommended_catalysts"] = route.get("recommended_catalysts", [])
     result["suggested_conditions"] = route.get("suggested_conditions", {})
 
-    # --- 阶段六：实验操作指南 ---
-    lab = lab_guide(product_smiles, reaction_type=reaction_type, scale=scale)
+    # --- 阶段七：实验操作指南 ---
+    is_radical = len(smarts_hits) > 0
+    lab = lab_guide(product_smiles, reaction_type=reaction_type, scale=scale,
+                     include_orca=include_orca, is_radical=is_radical)
     result["lab_guide"] = lab
 
     # --- 结论：值不值得做 ---
@@ -567,6 +732,175 @@ def full_guide(product_smiles: str, substrate_smiles: str = None,
     return result
 
 
+def quick_guide(product_smiles: str, substrate_smiles: str = None,
+                initiator: str = "", catalyst: str = "",
+                solvent: str = "", temperature: str = "",
+                scale: str = "0.5 mmol", show_details: bool = False) -> dict:
+    """
+    精简版：你做实验前快速查"值不值得做 + 怎么后处理"。
+
+    你已经知道要用什么引发剂/催化剂/溶剂/温度了，
+    不需要程序推荐。只需要：
+
+    1. 分析底物（反应位点在哪里）
+    2. 估 BDE（键好不好断）
+    3. 判断可行性（值得做吗？）
+    4. 给后处理方案（怎么萃取？怎么纯化？怎么表征？）
+    5. 安全警告
+
+    参数:
+        product_smiles: 产物 SMILES
+        substrate_smiles: 底物 SMILES
+        initiator: 你要用的引发剂（AIBN/BPO/...）
+        catalyst: 你要用的催化剂（Cu/PMDETA/...）
+        solvent: 你要用的溶剂（Toluene/MeCN/...）
+        temperature: 反应温度（"80°C"/"RT"/...）
+        scale: 反应规模
+    """
+    sub_smiles = substrate_smiles or product_smiles
+
+    # --- 1. 底物分析 ---
+    substrate = analyze_substrate(sub_smiles)
+
+    # --- 2. SMARTS 匹配 ---
+    smarts_hits = get_smarts_matches(sub_smiles)
+
+    # --- 3. BDE ---
+    bde_info = _estimate_bde(sub_smiles)
+    bde_kcal = bde_info.get("estimated_bde_kcal", 100)
+
+    # --- 4. 数据库 ---
+    try:
+        similar = query_similar_substrates(sub_smiles, limit=3)
+    except Exception:
+        similar = []
+
+    # --- 5. 可行性判断 ---
+    reasons = []
+    if bde_kcal < 90:
+        reasons.append(f"BDE≈{bde_kcal} kcal/mol，键容易断裂")
+    elif bde_kcal < 96:
+        reasons.append(f"BDE≈{bde_kcal} kcal/mol，中等强度")
+    else:
+        reasons.append(f"BDE≈{bde_kcal} kcal/mol，键较强，可能需要高温或强引发剂")
+
+    n_smarts = len(smarts_hits)
+    if n_smarts >= 2:
+        reasons.append(f"匹配 {n_smarts} 条 SMARTS 规则，有明确反应位点")
+    elif n_smarts >= 1:
+        reasons.append(f"匹配 {n_smarts} 条规则: {smarts_hits[0]['name']}")
+    else:
+        reasons.append("未匹配自由基反应规则，反应位点不明确")
+
+    if similar:
+        reasons.append(f"数据库有类似底物: {similar[0].get('substrate_name', similar[0]['smiles'])}")
+
+    if bde_kcal < 90 and n_smarts >= 1:
+        verdict = "推荐尝试"
+        confidence = "高"
+    elif bde_kcal < 96 or n_smarts >= 1:
+        verdict = "可以尝试"
+        confidence = "中"
+    else:
+        verdict = "风险较高，建议先做 DFT 计算"
+        confidence = "低"
+
+    # --- 6. 溶剂专属提醒 ---
+    solvent_tips = []
+    if solvent.upper() in SOLVENT_COLUMN_TIPS:
+        tips = SOLVENT_COLUMN_TIPS[solvent.upper()]
+        if tips.get("issue"):
+            solvent_tips = [f"溶剂提醒: {tips['issue']}"] + tips["fix"]
+
+    # --- 7. 实验操作指南 ---
+    reaction_family = _auto_detect_reaction_type(smarts_hits)
+    is_radical = len(smarts_hits) > 0  # SMARTS 匹配到自由基规则 = 自由基反应
+    lab = lab_guide(product_smiles, reaction_type=reaction_family, scale=scale,
+                     is_radical=is_radical)
+
+    return {
+        "product_smiles": product_smiles,
+        "substrate_smiles": sub_smiles,
+        "your_conditions": {
+            "initiator": initiator or "未指定",
+            "catalyst": catalyst or "未指定",
+            "solvent": solvent or "未指定",
+            "temperature": temperature or "未指定",
+            "scale": scale,
+        },
+        "substrate_analysis": substrate,
+        "bde_estimate": bde_info,
+        "smarts_matches": smarts_hits,
+        "similar_in_db": similar,
+        "feasibility": {
+            "verdict": verdict,
+            "confidence": confidence,
+            "reasons": reasons,
+        },
+        "solvent_tips": solvent_tips if show_details else [],
+        "lab_guide": lab,
+        "show_details": show_details,
+    }
+
+
+def print_quick_guide(result: dict):
+    """美化打印快速实验指南"""
+    print("=" * 60)
+    print(f"  快速实验评估: {result.get('product_smiles','')}")
+    print("=" * 60)
+
+    sub = result["substrate_analysis"]
+    print(f"\n  【底物】{result['substrate_smiles']}")
+    if "error" not in sub:
+        print(f"  MW: {sub.get('molecular_weight','?')} | 分子式: {sub.get('formula','?')}")
+        for s in sub.get("reactive_sites", [])[:3]:
+            print(f"  反应位点: {s['site']} — {s['type']} ({s['reactivity']})")
+
+    bde = result["bde_estimate"]
+    print(f"\n  【BDE】{bde.get('estimated_bde_kcal','?')} kcal/mol — {bde.get('label','?')}")
+
+    sm = result["smarts_matches"]
+    print(f"  【SMARTS】匹配 {len(sm)} 条: {', '.join(h['name'] for h in sm[:4])}")
+
+    yc = result["your_conditions"]
+    print(f"\n  【你的条件】")
+    print(f"  引发剂: {yc['initiator']}  |  催化剂: {yc['catalyst']}")
+    print(f"  溶剂: {yc['solvent']}  |  温度: {yc['temperature']}")
+
+    feas = result["feasibility"]
+    print(f"\n  【可行性】{feas['verdict']} (置信度: {feas['confidence']})")
+    for r in feas["reasons"]:
+        print(f"  + {r}")
+
+    lab = result["lab_guide"]
+    if "error" not in lab:
+        ex = lab["extraction"]
+        print(f"\n  【后处理】")
+        print(f"  萃取: {ex.get('primary','?')} (logP={ex.get('logP','?')})")
+        print(f"  纯化: {lab['purification']['method']}")
+        char = lab["characterization"]
+        print(f"  NMR: {char['nmr_1H']}")
+
+    sw = lab.get("safety_warnings", [])
+    if sw:
+        print(f"\n  [!! 安全] {', '.join(w['warning'] for w in sw)}")
+
+    # 溶剂和改性剂建议（仅在 show_details=True 时显示）
+    if result.get("show_details"):
+        st = result.get("solvent_tips", [])
+        if st:
+            print(f"\n  [溶剂注意事项]")
+            for t in st:
+                print(f"  {t}")
+        mod = lab.get("purification", {}).get("modifier_tips", [])
+        if mod:
+            print(f"\n  [柱层析改性剂]")
+            for m in mod:
+                print(f"  {m}")
+
+    print("=" * 60)
+
+
 def print_full_guide(result: dict):
     """美化打印一站式实验指南"""
     print("=" * 65)
@@ -575,7 +909,8 @@ def print_full_guide(result: dict):
 
     print(f"\n  【底物】{result['substrate_smiles']}")
     print(f"  【产物】{result['product_smiles']}")
-    print(f"  【反应类型】{result['reaction_type']}")
+    auto_tag = " (自动识别)" if result.get("auto_detected") else ""
+    print(f"  【反应类型】{result['reaction_type']}{auto_tag}")
 
     # 底物分析
     sub = result["substrate_analysis"]
@@ -626,7 +961,7 @@ def print_full_guide(result: dict):
     # 安全
     sw = lab.get("safety_warnings", [])
     if sw:
-        print(f"\n  ┌── [!! 安全警告] ──")
+        print(f"\n  ┌── [!! 安全] ──")
         for w in sw:
             print(f"  │ {w['warning']}")
 

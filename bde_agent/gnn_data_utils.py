@@ -53,6 +53,54 @@ def mol_to_data(smiles, frag1_smi, frag2_smi, bond_idx, bde_value):
     for i in target_atoms:
         atom_labels[i] = 3.0
 
+    # ---- 全局物理特征 (12维，每分子一组) ----
+    # Gasteiger 电荷
+    AllChem.ComputeGasteigerCharges(mol)
+    charges = [float(a.GetDoubleProp('_GasteigerCharge')) for a in mol.GetAtoms()]
+
+    # 自由基稳定化位点计数
+    benzylic_hit = len(mol.GetSubstructMatches(Chem.MolFromSmarts('[c][CH2,CH]')))
+    allylic_hit = len(mol.GetSubstructMatches(Chem.MolFromSmarts('[C]=[C][CH2,CH]')))
+    carbonyl_hit = len(mol.GetSubstructMatches(Chem.MolFromSmarts('[CX3](=O)[CH2,CH]')))
+
+    # 未成对电子代理: fragment1 vs fragment2 电荷差
+    # （简化: 有 Br/I/Cl 时可能产生自由基 → 1 或 2 个未成对电子）
+    radical_proxy = 1 if any(smi in Chem.MolToSmiles(mol) for smi in ['Br','I','Cl','O=','N=']) else 0
+
+    # 共轭长度代理: 最长连续 sp2 链
+    conj_length = 0
+    visited = set()
+    for atom in mol.GetAtoms():
+        if atom.GetIdx() in visited or not atom.GetIsAromatic():
+            continue
+        stack = [atom.GetIdx()]
+        local_len = 0
+        while stack:
+            aidx = stack.pop()
+            if aidx in visited:
+                continue
+            visited.add(aidx)
+            local_len += 1
+            for nb in mol.GetAtomWithIdx(aidx).GetNeighbors():
+                if nb.GetIsAromatic() and nb.GetIdx() not in visited:
+                    stack.append(nb.GetIdx())
+        conj_length = max(conj_length, local_len)
+
+    phys_feats = torch.tensor([
+        float(len(mol.GetAtoms())),       # 1. 总原子数
+        float(max(charges)),               # 2. 最大正电荷
+        float(min(charges)),               # 3. 最小负电荷
+        float(np.mean(charges)),           # 4. 平均电荷
+        float(benzylic_hit),               # 5. 苄基位点数
+        float(allylic_hit),                # 6. 烯丙基位点数
+        float(carbonyl_hit),               # 7. α-羰基位点数
+        float(conj_length),                # 8. 共轭长度
+        float(radical_proxy),              # 9. 未成对电子代理
+        float(mol_implicit.GetNumAromaticRings()),  # 10. 芳香环数
+        float(mol_implicit.GetRingInfo().NumRings()), # 11. 总环数
+        float(n_heavy),                    # 12. 重原子数
+    ], dtype=torch.float32)
+
     # ---- 节点特征 (10维) ----
     node_feats = []
     for atom in mol.GetAtoms():
@@ -93,7 +141,8 @@ def mol_to_data(smiles, frag1_smi, frag2_smi, bond_idx, bde_value):
     edge_attr_t = torch.tensor(edge_attr, dtype=torch.float32)
     y = torch.tensor([bde_value], dtype=torch.float32)
 
-    return Data(x=x, edge_index=edge_index, edge_attr=edge_attr_t, y=y)
+    return Data(x=x, edge_index=edge_index, edge_attr=edge_attr_t,
+                phys=phys_feats, y=y)
 
 
 def load_gnn_data(csv_path, nrows=None):

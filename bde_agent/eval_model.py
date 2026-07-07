@@ -5,7 +5,7 @@ os.environ['RDKIT_PYTHON_DISABLE_WARNINGS'] = '1'
 from rdkit import RDLogger
 RDLogger.logger().setLevel(RDLogger.ERROR)
 
-from gnn_train import BDEGNNv2
+from gnn_train import BDEGNNv3
 from gnn_data_utils import load_gnn_data
 from config import CONFIG
 from torch_geometric.loader import DataLoader
@@ -24,8 +24,8 @@ bde_mean = ckpt['bde_mean']
 bde_std = ckpt['bde_std']
 print(f"BDE mean={bde_mean:.1f}, std={bde_std:.1f}")
 
-model = BDEGNNv2(
-    node_dim=10, edge_dim=4,
+model = BDEGNNv3(
+    node_dim=10, edge_dim=4, phys_dim=12,
     hidden=CONFIG['gnn_hidden'],
     n_layers=CONFIG['gnn_layers'],
     dropout=CONFIG['dropout'],

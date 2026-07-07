@@ -16,53 +16,59 @@ from config import CONFIG
 
 
 # ======== 1. GNN 模型 v2 ========
-class BDEGNNv2(nn.Module):
-    """GINEConv + 边特征 + 残差连接 + 边界原子提取"""
+class BDEGNNv3(nn.Module):
+    """双通道: GINEConv 图通道 + MLP 物理特征通道"""
 
-    def __init__(self, node_dim=10, edge_dim=4, hidden=256, n_layers=4, dropout=0.4):
+    def __init__(self, node_dim=10, edge_dim=4, phys_dim=12, hidden=256, n_layers=4, dropout=0.4):
         super().__init__()
         self.hidden = hidden
-        self.dropout = nn.Dropout(dropout)
 
+        # ==== GNN 图通道 ====
         self.input_proj = nn.Linear(node_dim, hidden)
-
         self.convs = nn.ModuleList()
         self.norms = nn.ModuleList()
         for i in range(n_layers):
-            in_dim = hidden
             nn_mlp = nn.Sequential(
-                nn.Linear(in_dim, hidden),
-                nn.ReLU(),
-                nn.Linear(hidden, hidden),
-            )
+                nn.Linear(hidden, hidden), nn.ReLU(), nn.Linear(hidden, hidden))
             self.convs.append(GINEConv(nn_mlp, edge_dim=edge_dim, train_eps=True))
             self.norms.append(nn.LayerNorm(hidden))
 
+        # ==== 物理特征 MLP 通道 ====
+        self.phys_net = nn.Sequential(
+            nn.Linear(phys_dim, 64), nn.ReLU(), nn.Dropout(dropout),
+            nn.Linear(64, 32), nn.ReLU(),
+        )
+
+        # ==== 汇聚层 ====
         self.fc = nn.Sequential(
-            nn.Linear(hidden * 2, hidden),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden, hidden // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
+            nn.Linear(hidden * 2 + 32, hidden), nn.ReLU(), nn.Dropout(dropout),
+            nn.Linear(hidden, hidden // 2), nn.ReLU(), nn.Dropout(dropout),
             nn.Linear(hidden // 2, 1),
         )
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, data):
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
 
+        # GNN 图通道
         h = self.input_proj(x)
-
         for conv, norm in zip(self.convs, self.norms):
             h_new = conv(h, edge_index, edge_attr)
             h_new = norm(h_new).relu()
             h_new = self.dropout(h_new)
             h = h + h_new
 
+        # 目标原子提取
         is_target = (x[:, -1] == 3.0)
         target_embs = h[is_target]
         target_embs = target_embs.view(-1, self.hidden * 2)
-        return self.fc(target_embs)
+
+        # 物理特征通道
+        phys_emb = self.phys_net(data.phys)
+
+        # 双通道汇聚
+        combined = torch.cat([target_embs, phys_emb], dim=1)
+        return self.fc(combined)
 
 
 if __name__ == '__main__':
@@ -93,8 +99,8 @@ if __name__ == '__main__':
     torch.set_num_threads(16)
     print(f"Device: {device}  Threads: {torch.get_num_threads()}")
 
-    model = BDEGNNv2(
-        node_dim=10,
+    model = BDEGNNv3(
+        node_dim=12,
         edge_dim=4,
         hidden=CONFIG['gnn_hidden'],
         n_layers=CONFIG['gnn_layers'],

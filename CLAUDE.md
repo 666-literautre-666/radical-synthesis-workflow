@@ -37,23 +37,39 @@
 - ✅ ORCA/Gaussian接口 + NMR/MS/ESR预测
 - ✅ ZFS拟合 (EasySpin+Octave)
 - ✅ GNN v2 (GINEConv×4, MAE 1.46, R² 0.9836)
-- 🔄 GNN v2 接入 `_estimate_bde`（规则+ML双输出）
-- 🔜 OrbitAll 自旋密度预训练 + 自由基BDE精调（暑假）
-- 🔜 Δ-learning（模型只学"规则差多少"）
+- ✅ GNN v5 (双通道 + 多任务, **MAE 1.03**, R² 0.9862)
+- ✅ SpinPretrainNN v1 预训练 (QM9star 712k自由基, MAE 0.02, r=0.979)
+- ✅ BDE Agent 三层引擎: 数据库查表(65k) → 规则 → GNN 全键预测
+- 🔄 v5-Δ Δ-learning 训练中 (predict BDE - rule_BDE)
+- 🔜 前插网络升级: 加键级 + S-T能隙 + 扩大预训练分子数
+- 🔜 Δ-learning 验证通过后, 引入更多物理特征 (键级/S-T能隙/轨道能)
 - 🔜 UV-Vis 预测模块
 
-## 阶段六创新方向
+## v5 模型架构 (2026-07-07)
 
-1. 自由基物理特征注入GNN（自旋密度/电荷/多重度 → 节点特征）
-2. 指纹+GNN双通道缝合（Morgan指纹MLP + 分子图GNN → 拼接预测BDE）
-3. 差分ML（Δ-learning: `bde = rule_bde + delta`）
+```
+SMILES → SpinPretrainNN(冻结, 602k params) → 256维自旋嵌入
+           ├── Channel A: 压缩 256→64 → 拼入节点特征 (10+64=74)
+           ├── Channel B: 残差 256→hidden → 门控注入GNN末层
+           └── 多任务: BDE(主) + spin(辅) + charge(辅)
+```
+
+| 版本 | 设计 | MAE | R² |
+|------|------|-----|------|
+| v2 | 纯GNN, 10维输入 | 1.46 | 0.9836 |
+| v4 | 10+256拼接(闭壳层) | 4.18 | — |
+| v5 | 双通道+多任务 | **1.03** | **0.9862** |
+| v5-Δ | v5 + Δ-learning | 训练中 | — |
 
 ## 代码修改入口
 
 1. SMARTS规则 → `scripts/database.py` → `seed_smarts_rules()`
 2. 引发剂/催化剂 → `scripts/reaction_predictor.py` → `RADICAL_INITIATORS` / `CATALYSTS_MEDIATORS`
 3. BDE估算 → `scripts/reaction_predictor.py` → `_estimate_bde()`
-4. 合成可行性 → `scripts/reaction_predictor.py` → `_assess_synthesizability()`
+4. BDE Agent 推理 → `bde_agent/gnn_inference.py` → `analyze_bde()` / `predict_all_bonds()`
+5. BDE GNN 训练 → `bde_agent/train_v5.py` / `train_v5_delta.py`
+6. 前插网络预训练 → `bde_agent/train_spin.py`
+7. 规则 BDE 基线 → `bde_agent/rule_bde.py` (24 键型)
 
 ## Commands
 

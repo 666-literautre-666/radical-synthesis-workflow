@@ -12,11 +12,11 @@ from spin_pretrain import SpinPretrainNN, freeze_and_export
 
 # ======== 配置 ========
 CSV_PATH = 'E:/qm9star_radicals.csv'
-N_MOLECULES = 200000
+N_MOLECULES = 500000
 HIDDEN = 256
 N_LAYERS = 4
 BATCH_SIZE = 128
-EPOCHS = 300
+EPOCHS = 500
 LR = 0.001
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 

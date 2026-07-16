@@ -46,32 +46,36 @@ class SpinPretrainNN(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # ---- 多任务预测头 ----
-        self.spin_head = nn.Sequential(     # 自旋密度 (标量/原子)
+        self.spin_head = nn.Sequential(         # 自旋密度 (1)
             nn.Linear(hidden, hidden // 2), nn.ReLU(),
             nn.Linear(hidden // 2, 1),
         )
-        self.charge_head = nn.Sequential(   # 电荷 (标量/原子)
+        self.charge_head = nn.Sequential(       # Mulliken电荷 (1)
             nn.Linear(hidden, hidden // 2), nn.ReLU(),
             nn.Linear(hidden // 2, 1),
+        )
+        self.graph_head = nn.Sequential(        # 轨道 + 偶极 (5)
+            nn.Linear(hidden, hidden // 2), nn.ReLU(),
+            nn.Linear(hidden // 2, 5),  # alpha_homo,lumo,beta_homo,lumo,dipole_mag
         )
 
     def forward(self, data):
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
         batch = data.batch
 
-        # GINEConv 主干
         h = self.input_proj(x)
         for conv, norm in zip(self.convs, self.norms):
             h_new = conv(h, edge_index, edge_attr)
             h_new = norm(h_new).relu()
             h_new = self.dropout(h_new)
-            h = h + h_new            # 残差连接
+            h = h + h_new
 
-        # 原子级预测
-        spin_pred = self.spin_head(h).squeeze(-1)      # [N_atoms]
-        charge_pred = self.charge_head(h).squeeze(-1)   # [N_atoms]
+        sp = self.spin_head(h).squeeze(-1)           # [N]
+        ch = self.charge_head(h).squeeze(-1)          # [N]
+        g = global_mean_pool(h, batch)
+        gr = self.graph_head(g)                       # [B, 5]
 
-        return spin_pred, charge_pred, h                # h 是嵌入，注入 BDE GNN 用
+        return sp, ch, gr, h
 
 
 # ======== 2. 数据准备: SMILES → PyG Data (仿 QM9star 字段) ========
@@ -201,10 +205,10 @@ def freeze_and_export(model, ckpt_path='spin_pretrain_best.pt',
     ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=True)
     model.load_state_dict(ckpt['model'])
 
-    # 只导出 GNN 主干 (input_proj + convs + norms), 不导出预测头
+    # 只导出 GNN 主干, 不导出预测头
     frozen = {}
     for k, v in model.state_dict().items():
-        if not k.startswith('spin_head') and not k.startswith('charge_head'):
+        if not any(k.startswith(h) for h in ['spin_head', 'charge_head', 'graph_head']):
             frozen[k] = v
 
     torch.save({'backbone': frozen, 'hidden': model.hidden}, output_path)

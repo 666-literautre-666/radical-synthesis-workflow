@@ -1,0 +1,6 @@
+E   0 BDE_tr=0.1867 sp_tr=0.0084 ch_tr=0.0081  va=0.0621 best=0.0621@0  gate=0.730  1min
+E   1 BDE_tr=0.0845 sp_tr=0.0018 ch_tr=0.0022  va=0.0657 best=0.0621@0  gate=0.730  2min
+E   2 BDE_tr=0.0690 sp_tr=0.0012 ch_tr=0.0016  va=0.0452 best=0.0452@2  gate=0.729  4min
+E   3 BDE_tr=0.0603 sp_tr=0.0010 ch_tr=0.0013  va=0.0587 best=0.0452@2  gate=0.729  5min
+E   4 BDE_tr=0.0540 sp_tr=0.0008 ch_tr=0.0011  va=0.0494 best=0.0452@2  gate=0.728  6min
+E  25 BDE_tr=0.0329 sp_tr=0.0003 ch_tr=0.0005  va=0.0393 best=0.0316@23  gate=0.706  31min

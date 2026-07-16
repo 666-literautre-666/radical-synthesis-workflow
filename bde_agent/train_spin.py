@@ -11,8 +11,9 @@ from rdkit.Chem import AllChem
 from spin_pretrain import SpinPretrainNN, freeze_and_export
 
 # ======== 配置 ========
-CSV_PATH = 'E:/qm9star_radicals.csv'
-N_MOLECULES = 500000
+CSV_PATH = 'E:/qm9star_radicals_v2.csv'
+N_MOLECULES = 700000
+LOG_PATH = 'C:/Users/xushaobo/Desktop/spin_v2_progress.txt'
 HIDDEN = 256
 N_LAYERS = 4
 BATCH_SIZE = 128
@@ -38,8 +39,14 @@ def load_data(csv_path, n_molecules):
                 mol_data[mid] = []
             mol_data[mid].append((
                 int(row['atom_idx']), float(row['spin_density']),
-                float(row['mulliken_charge']), int(row['formal_radical']),
-                row['smiles']
+                float(row['mulliken_charge']), float(row['npa_charge']),
+                int(row['formal_radical']),
+                float(row['wiberg_bo_sum']), float(row['nbo_bo_sum']),
+                row['smiles'],
+                float(row['alpha_gap']), float(row['beta_gap']),
+                float(row['alpha_homo']), float(row['alpha_lumo']),
+                float(row['beta_homo']), float(row['beta_lumo']),
+                float(row['dipole_mag'])
             ))
         if len(mol_data) >= n_molecules:
             break
@@ -54,7 +61,7 @@ def load_data(csv_path, n_molecules):
     skipped = 0
 
     for idx, (mid, rows) in enumerate(mol_data.items()):
-        smiles = rows[0][4]
+        smiles = rows[0][7]
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             skipped += 1
@@ -63,16 +70,21 @@ def load_data(csv_path, n_molecules):
         mol = Chem.AddHs(mol)
         n_atoms = mol.GetNumAtoms()
 
-        # 标签
+        # 节点标签: spin, mulliken_charge, f_rad
         spin_densities = np.zeros(n_atoms, dtype=np.float32)
-        charges = np.zeros(n_atoms, dtype=np.float32)
+        charges_mull = np.zeros(n_atoms, dtype=np.float32)
         f_radicals = np.zeros(n_atoms, dtype=np.float32)
         for row in rows:
             idx_a = row[0]
             if idx_a < n_atoms:
                 spin_densities[idx_a] = row[1]
-                charges[idx_a] = row[2]
-                f_radicals[idx_a] = row[3]
+                charges_mull[idx_a] = row[2]
+                f_radicals[idx_a] = row[4]
+
+        # 图级标签: alpha_homo, alpha_lumo, beta_homo, beta_lumo, dipole_mag (5个)
+        r0 = rows[0]
+        y_graph = np.array([r0[10], r0[11], r0[12], r0[13], r0[14]],
+                          dtype=np.float32)
 
         # 节点特征 (10维)
         node_feats = []
@@ -105,11 +117,11 @@ def load_data(csv_path, n_molecules):
 
         edge_index = torch.tensor([ei0, ei1], dtype=torch.long)
         edge_attr = torch.tensor(ea, dtype=torch.float32)
-        y_spin = torch.tensor(spin_densities, dtype=torch.float32)
-        y_charge = torch.tensor(charges, dtype=torch.float32)
-
         data_list.append(Data(x=x, edge_index=edge_index, edge_attr=edge_attr,
-                              y_spin=y_spin, y_charge=y_charge, smiles=smiles))
+            y_spin=torch.tensor(spin_densities, dtype=torch.float32),
+            y_charge=torch.tensor(charges_mull, dtype=torch.float32),
+            y_graph=torch.tensor(y_graph, dtype=torch.float32).unsqueeze(0),
+            smiles=smiles))
 
         if (idx+1) % 10000 == 0:
             print(f"  {idx+1:,}/{len(mol_data):,} graphs")
@@ -149,8 +161,9 @@ def main():
         tr_loss = 0.0
         for batch in tr_loader:
             batch = batch.to(DEVICE)
-            sp, ch, _ = model(batch)
-            loss = loss_fn(sp, batch.y_spin) + 0.3 * loss_fn(ch, batch.y_charge)
+            sp, ch, gr, _ = model(batch)
+            loss = (loss_fn(sp, batch.y_spin) + 0.3 * loss_fn(ch, batch.y_charge) +
+                    0.3 * loss_fn(gr, batch.y_graph))
             opt.zero_grad(); loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
@@ -162,7 +175,7 @@ def main():
         with torch.no_grad():
             for batch in va_loader:
                 batch = batch.to(DEVICE)
-                sp, _, _ = model(batch)
+                sp, _, _, _ = model(batch)
                 va_loss += loss_fn(sp, batch.y_spin).item()
         va_loss /= len(va_loader)
         sch.step()
@@ -172,10 +185,15 @@ def main():
             torch.save({'model': model.state_dict(), 'epoch': ep, 'best_val': best_va}, 'spin_pretrain_best.pt')
 
         if ep % 25 == 0 or ep < 5:
-            print(f"E{ep:4d}  tr={tr_loss:.4f}  va={va_loss:.4f}  best={best_va:.4f}@{best_ep}  {((time.time()-t0)/60):.0f}min")
+            msg = f"E{ep:4d}  tr={tr_loss:.4f}  va={va_loss:.4f}  best={best_va:.4f}@{best_ep}  {((time.time()-t0)/60):.0f}min"
+            print(msg)
+            with open(LOG_PATH, 'a') as lf: lf.write(msg + '\n')
 
         if ep - best_ep > 80:
-            print(f"Early stop at {ep}"); break
+            msg = f"Early stop at {ep}"
+            print(msg)
+            with open(LOG_PATH, 'a') as lf: lf.write(msg + '\n')
+            break
 
     # 测试
     print("\nTesting...")
@@ -185,15 +203,18 @@ def main():
     preds, ys = [], []
     with torch.no_grad():
         for batch in te_loader:
-            batch = batch.to(DEVICE); sp, _, _ = model(batch)
+            batch = batch.to(DEVICE); sp, _, _, _ = model(batch)
             preds.extend(sp.cpu().tolist()); ys.extend(batch.y_spin.cpu().tolist())
     preds, ys = np.array(preds), np.array(ys)
     mae = np.mean(np.abs(preds - ys))
     rmse = np.sqrt(np.mean((preds - ys)**2))
     r = np.corrcoef(preds, ys)[0,1]
-    print(f"Test MAE={mae:.4f}  RMSE={rmse:.4f}  r={r:.4f}  range=[{ys.min():.3f},{ys.max():.3f}]")
+    result = f"Test MAE={mae:.4f}  RMSE={rmse:.4f}  r={r:.4f}  range=[{ys.min():.3f},{ys.max():.3f}]"
+    print(result)
+    with open(LOG_PATH, 'a') as lf:
+        lf.write('\n' + result + '\n')
+        lf.write(f"v1 baseline: MAE=0.0191  RMSE=0.0428  r=0.9783\n")
 
-    # 导出冻结权重
     freeze_and_export(model, 'spin_pretrain_best.pt', 'spin_pretrain_frozen.pt')
 
 if __name__ == '__main__':
